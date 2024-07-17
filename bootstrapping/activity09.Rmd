@@ -3,6 +3,123 @@ title: "Activity 9 - Bootstrapping"
 output: github_document
 ---
 
+## ## Task 2: Load the necessary packages
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+# Loading necessary packages
+library(tidyverse)
+library(tidymodels)
 ```
+
+## Task 3: Create the data
+
+```{r}
+  # Set a random seed value so we can obtain the same "random" results
+  set.seed(2023)
+
+  # Create a data frame/tibble named sim_dat
+  sim_dat <- tibble(
+  # Explain what next line is doing
+    x1 = runif(20, -5, 5),
+  # Explain what next line is doing
+    x2 = runif(20, 0, 100),
+  # Explain what next line is doing
+    x3 = rbinom(20, 1, 0.5)
+    )
+
+  b0 <- 2
+  b1 <- 0.25
+  b2 <- -0.5
+  b3 <- 1
+  sigma <- 1.5
+
+  errors <- rnorm(20, 0, sigma)
+
+  sim_dat <- sim_dat %>% 
+    mutate(
+      y = b0 + b1*x1 + b2*x2 + b3*x3 + errors,
+      x3 = case_when(
+        x3 == 0 ~ "No",
+        TRUE ~ "Yes"
+        )
+      )
+```
+
+Complete the following tasks:
+
+1.  Go back through the previous code and explain what each line is
+    doing by providing a comment. You are provided with an example in
+    the first line and places for the rest of that code “sentence”. Do
+    this for all the previous code chunk.
+
+```{r create-data}
+# Set a random seed value so we can obtain the same "random" results
+set.seed(2023)
+
+# Create a data frame/tibble named sim_dat
+sim_dat <- tibble(
+  # Generate 20 random numbers between -5 and 5 for variable x1
+  x1 = runif(20, -5, 5),
+  # Generate 20 random numbers between 0 and 100 for variable x2
+  x2 = runif(20, 0, 100),
+  # Generate 20 random binary values (0 or 1) with a probability of 0.5 for variable x3
+  x3 = rbinom(20, 1, 0.5)
+)
+
+# Define the true coefficients for the linear model
+b0 <- 2   # Intercept
+b1 <- 0.25  # Coefficient for x1
+b2 <- -0.5  # Coefficient for x2
+b3 <- 1  # Coefficient for x3
+sigma <- 1.5  # Standard deviation of the errors
+
+# Generate random errors with mean 0 and standard deviation 1.5
+errors <- rnorm(20, 0, sigma)
+
+# Compute the response variable y using the true model and add it to the dataset
+sim_dat <- sim_dat %>% 
+  mutate(
+    y = b0 + b1*x1 + b2*x2 + b3*x3 + errors,  # Calculate y based on the linear model and errors
+    x3 = case_when(
+      x3 == 0 ~ "No",  # Convert 0 values of x3 to "No"
+      TRUE ~ "Yes"     # Convert 1 values of x3 to "Yes"
+    )
+  )
+
+# Display the first few rows of the dataset
+head(sim_dat)
+```
+
+2.  What is the true (population-level) model? Note that we are adding
+    noise/variability, but based on the above code you can see what the
+    “baseline” model is.
+
+The true (population-level) model is the baseline model without the added noise (errors). Based on the given code, the true model is a linear combination of the variables x1, x2, and x3 with their respective coefficients, plus an intercept term. The true model is as follows:
+
+y = b0 + b1.x1 + b2.x2 + b3.x3
+
+Substituting the coefficients from the code:
+
+y = 2 + 0.25.x1 - 0.5.x2 + 1.x3
+
+Where:
+
+b0 = 2 (intercept)
+
+b1 = 0.25 (coefficient for x1) 
+
+b2 = −0.5 (coefficient for x2)
+
+b3 = 1 (coefficient for x3)
+
+The variable x3 is binary and represented as 0 (No) or 1 (Yes). The noise (errors) added in the actual model simulations represents random variability around this true model.
+
+3.  Create graphical visualizations for the relationship between all
+    variable *pair*s (i.e., `y` and each `x` and also each `x` pair).
+    Provide a brief summary of what you see/notice. That is, how do
+    these relationships compare with your comments from (1) and model in
+    (2)? Especially for the relationship between `y` and each `x`. Hint:
+    Do you remember what function/package makes this very easy to
+    produce?
