@@ -123,3 +123,247 @@ The variable x3 is binary and represented as 0 (No) or 1 (Yes). The noise (error
     (2)? Especially for the relationship between `y` and each `x`. Hint:
     Do you remember what function/package makes this very easy to
     produce?
+    
+To create graphical visualizations for the relationships between all variable pairs, we can use the GGally package, which extends ggplot2 to create pair plots easily.
+
+```{r}
+# Load the necessary package
+library(GGally)
+
+# Create a pair plot to visualize relationships between all variables
+pair_plot <- ggpairs(sim_dat, columns = 1:4, aes(color = x3))
+
+# Display the pair plot
+pair_plot
+```
+
+
+There appears to be a positive linear relationship between y and x1. This aligns with the true model where x1 has a positive coefficient of 0.25.
+
+There is a negative linear relationship between y and x2. This is consistent with the true model where x2 has a negative coefficient of -0.5.
+
+## Task 4: Traditional MLR model
+
+First we will fit an estimated model to our simulated data. Recall that
+we have done some similar work in past activities, but for ease of
+searching I will tell you what to do.
+
+- Create a new R code chunk and type the following code:
+
+```{r}
+# Fit the multiple linear regression model
+mlr_fit <- linear_reg() %>%
+  set_mode("regression") %>% 
+  set_engine("lm") %>% 
+  fit(y ~ x1 + x2 + x3, data = sim_dat)
+
+# Include the confidence intervals for the estimated slope parameters
+mlr_results <- tidy(mlr_fit, conf.int = TRUE)
+
+# Display the results
+mlr_results
+```
+
+Answer the following question:
+
+4.  Looking at your population-level model from (2), how accurate are
+    your results? Explain how you made this decision. That is, what did
+    you use from your output and how did you use that information to
+    decide?
+    
+Detailed Evaluation:
+
+Intercept (b0):
+
+True value: 2
+Estimated value: 1.942
+Confidence Interval: [0.339, 3.545]
+Assessment: The estimate (1.942) is very close to the true value (2), and the true value lies within the confidence interval. This indicates that the model is accurately estimating the intercept.
+
+x1 (b1):
+
+True value: 0.25
+Estimated value: 0.335
+Confidence Interval: [0.146, 0.524]
+Assessment: The estimate (0.335) is slightly higher than the true value (0.25), but the true value is within the confidence interval. This suggests that the model is fairly accurate for x1.
+
+x2 (b2):
+
+True value: -0.5
+Estimated value: -0.495
+Confidence Interval: [-0.518, -0.472]
+Assessment: The estimate (-0.495) is very close to the true value (-0.5), and the true value falls within the confidence interval. This shows high accuracy for x2.
+
+x3 (b3):
+
+True value: 1
+Estimated value: 1.814
+Confidence Interval: [0.735, 2.894]
+Assessment: The estimate (1.814) is higher than the true value (1), but the true value is within the confidence interval. This indicates some variability but still reasonable accuracy for x3.
+
+Conclusion:
+
+Overall, the MLR model provides estimates that are quite close to the true population-level coefficients. Each true coefficient lies within the respective confidence intervals of the estimates, indicating that the model is accurately capturing the underlying relationships despite the added noise. The standard errors and p-values also support the statistical significance of the estimates. This evaluation confirms that the model is reliable and accurate in estimating the true coefficients.
+
+## Task 5: Bootstrapping
+
+Now, bootstrapping treats your sample of data as a psuedo-population
+that you will create multiple new samples from. Each sample will be of
+the same size and same number of variables as the original
+($n = 20; p = 3$). However, once a row has been sampled, it will be put
+back into the “population” (i.e., sampling with replacement). With
+computing power being relatively cheap now, we can do this for a large
+number of times to build up $B$ bootstrap samples. For example, we might
+do $B = 2,000$ bootstrap samples each of $n = 20$.
+
+```{r}
+# Set a random seed value so we can obtain the same "random" results
+set.seed(631)
+
+# Generate the 2000 bootstrap samples
+boot_samps <- sim_dat %>% 
+  bootstraps(times = 2000)
+
+# View the structure of the bootstrap samples
+boot_samps
+```
+
+Now we need to fit a linear model to each bootstrap sample. Hopefully,
+from STA 518, you remember some of the handy iteration functions from
+`{purrr}`.
+
+```{r}
+# Create a function that fits a fixed MLR model to one split dataset
+fit_mlr_boots <- function(split) {
+  lm(y ~ x1 + x2 + x3, data = analysis(split))
+}
+
+# Fit the model to each split and store the information
+# Also, obtain the tidy model information
+boot_models <- boot_samps %>% 
+  mutate(
+    model = map(splits, fit_mlr_boots),
+    coef_info = map(model, tidy)
+  )
+
+# Unnest the coefficient information from the models
+boots_coefs <- boot_models %>% 
+  unnest(coef_info)
+
+# Display the first few rows of the bootstrap coefficients
+head(boots_coefs)
+```
+
+We can then calculate the bootstrap intervals by obtaining the
+$2.5^{th}$ and $97.5^{th}$ percentiles - similar to a 95% confidence
+interval as we are finding the values that contain the middle 95% of the
+bootstrap values. Note that we provide the level of significance (1 -
+confidence level): $\alpha = 0.05 = 1 - 0.95$.
+
+```{r}
+# Calculate the 95% bootstrap confidence intervals
+boot_int <- int_pctl(boot_models, statistics = coef_info, alpha = 0.05)
+
+# Display the bootstrap confidence intervals
+boot_int
+```
+
+I like to also visualize this information to get a sense of the
+variability of my estimates.
+
+```{r}
+# Visualization of bootstrap estimates
+ggplot(boots_coefs, aes(x = estimate)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
+  facet_wrap(~ term, scales = "free") +
+  geom_vline(data = boot_int, aes(xintercept = .lower), col = "blue", linetype = "dashed") +
+  geom_vline(data = boot_int, aes(xintercept = .upper), col = "blue", linetype = "dashed") +
+  labs(title = "Distribution of Bootstrap Estimates with 95% CI",
+       x = "Estimate",
+       y = "Frequency") +
+  theme_minimal()
+```
+
+This code creates a histogram for each term's estimate from the bootstrap samples and overlays the 95% confidence interval lines. The `facet_wrap` function is used to create separate plots for each term, and the `geom_vline` function adds vertical lines representing the lower and upper bounds of the bootstrap confidence intervals.
+
+Answer the following question:
+
+5.  Looking at your population-level model from (2), how accurate are
+    your results? Explain how you made this decision. That is, what did
+    you use from your output and how did you use that information to
+    decide?
+    
+Comparison and Evaluation
+
+Intercept:
+
+Population: 2
+Bootstrap CI: [0.18, 3.60]
+Evaluation: The population value (2) falls within the bootstrap confidence interval, suggesting that the bootstrap interval provides a reasonable estimate for the intercept.
+
+x1 Coefficient:
+
+Population: 0.25
+Bootstrap CI: [0.19, 0.51]
+Evaluation: The population value (0.25) falls within the bootstrap confidence interval. The estimate from the bootstrap is close to the population value, indicating good accuracy.
+
+x2 Coefficient:
+
+Population: -0.5
+Bootstrap CI: [-0.52, -0.47]
+Evaluation: The population value (-0.5) falls within the bootstrap confidence interval, and the estimate from the bootstrap is very close to the population value, indicating high accuracy.
+
+x3Yes Coefficient:
+
+Population: 1
+Bootstrap CI: [0.89, 2.83]
+Evaluation: The population value (1) falls within the bootstrap confidence interval, but the interval is quite wide. The point estimate is higher than the population value, suggesting that there might be some variability, but it still captures the true effect.
+
+Conclusion
+The bootstrap intervals show that the estimated coefficients for x1 and x2 are highly accurate, as the true population values are very close to the bootstrap point estimates and lie within the confidence intervals. The intercept and x3 coefficient also capture the true population values within their intervals, but with more variability, especially for x3. Overall, the bootstrap method provides reasonable and accurate estimates of the population-level coefficients, aligning well with the true model specified in Task 2.
+
+### Challenge
+
+Adding to your previous code chunk, add the following:
+
+- A pair of vertical orange lines that correspond to the traditional
+  method’s 95% confidence intervals
+- A single vertical blue line that corresponds to the population slope
+  value (there should be a unique blue line in each plot)
+
+Once you can verify these “simpler” asks, dress your plot up. Use colors
+that speak to you. Use themes that speak to you. Make this plot yours!
+
+```{r}
+# Define traditional 95% confidence intervals
+traditional_ci <- tibble(
+  term = c("(Intercept)", "x1", "x2", "x3Yes"),
+  lower = c(0.3391323, 0.1458750, -0.5183913, 0.7347769),
+  upper = c(3.5452396, 0.5237101, -0.4724033, 2.8936610)
+)
+
+# Define population slope values
+population_values <- tibble(
+  term = c("(Intercept)", "x1", "x2", "x3Yes"),
+  value = c(2, 0.25, -0.5, 1)
+)
+
+# Plotting the bootstrap coefficients with additional elements
+ggplot(boots_coefs, aes(x = estimate)) +
+  geom_histogram(bins = 30, fill = "lightblue", color = "black") +
+  facet_wrap(~ term, scales = "free") +
+  geom_vline(data = boot_int, aes(xintercept = .lower), col = "blue", linetype = "dashed") +
+  geom_vline(data = boot_int, aes(xintercept = .upper), col = "blue", linetype = "dashed") +
+  geom_vline(data = traditional_ci, aes(xintercept = lower), col = "orange", linetype = "solid") +
+  geom_vline(data = traditional_ci, aes(xintercept = upper), col = "orange", linetype = "solid") +
+  geom_vline(data = population_values, aes(xintercept = value), col = "red", linetype = "dotted", size = 1.2) +
+  labs(title = "Bootstrap Estimates with Traditional and Population Values",
+       x = "Estimate",
+       y = "Count") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 16, face = "bold"),
+        strip.text = element_text(size = 14),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10))
+```
+
